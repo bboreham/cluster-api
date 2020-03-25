@@ -39,7 +39,7 @@ API design. Because of this, all of the codebase is rapidly changing.
     - Weekly on Tuesdays @ 12:00 PT ([Zoom][providerZoomMeetingTues]) and Wednesdays @ 15:00 CET ([Zoom][providerZoomMeetingWed])
     - Previous meetings: \[ [notes][implementerNotes] \]
 
-Pull Requests and feedback on issues are very welcome!
+[Pull Requests] and feedback on issues are very welcome!
 See the [issue tracker] if you're unsure where to start, especially the [Good first issue] and [Help wanted] tags, and
 also feel free to reach out to discuss.
 
@@ -56,6 +56,7 @@ Participation in the Kubernetes community is governed by the [Kubernetes Code of
 [implementerNotes]: https://docs.google.com/document/d/1IZ2-AZhe4r3CYiJuttyciS7bGZTTx4iMppcA8_Pr3xE/edit
 [providerZoomMeetingTues]: https://zoom.us/j/140808484
 [providerZoomMeetingWed]: https://zoom.us/j/424743530
+[Pull Requests]: https://github.com/kubernetes-sigs/cluster-api/pulls
 [issue tracker]: https://github.com/kubernetes-sigs/cluster-api/issues
 [#cluster-api slack]: https://kubernetes.slack.com/archives/C8TSNPY4T
 [kubernetes discuss]: https://discuss.kubernetes.io/c/contributors/cluster-api
