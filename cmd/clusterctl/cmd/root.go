@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/client/config"
 	logf "sigs.k8s.io/cluster-api/cmd/clusterctl/log"
+	"sigs.k8s.io/controller-runtime/pkg/tracing"
 )
 
 type stackTracer interface {
@@ -66,6 +67,13 @@ var RootCmd = &cobra.Command{
 }
 
 func Execute() {
+	tracingCloser, err := tracing.SetupJaeger("clusterctl")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to set up Jaeger: %v", err)
+		os.Exit(1)
+	}
+	defer tracingCloser.Close()
+
 	if err := RootCmd.Execute(); err != nil {
 		if verbosity != nil && *verbosity >= 5 {
 			if err, ok := err.(stackTracer); ok {

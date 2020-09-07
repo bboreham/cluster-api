@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	ot "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
@@ -29,6 +30,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
+	"sigs.k8s.io/controller-runtime/pkg/tracing"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -63,6 +65,14 @@ func (r *DockerClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
+	}
+
+	sp, err := tracing.SpanFromAnnotations("Reconcile.DockerCluster", dockerCluster.Annotations)
+	if err == nil && sp != nil {
+		defer sp.Finish()
+		sp.SetTag("objectKey", req.NamespacedName)
+		sp.SetTag("ResourceVersion", dockerCluster.ResourceVersion)
+		ctx = ot.ContextWithSpan(ctx, sp)
 	}
 
 	// Fetch the Cluster.

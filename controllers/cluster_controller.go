@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	ot "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -39,6 +40,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
+	"sigs.k8s.io/controller-runtime/pkg/tracing"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -109,6 +111,14 @@ func (r *ClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr e
 
 		// Error reading the object - requeue the request.
 		return ctrl.Result{}, err
+	}
+
+	sp, err := tracing.SpanFromAnnotations("Reconcile.Cluster", cluster.Annotations)
+	if err == nil && sp != nil {
+		defer sp.Finish()
+		sp.SetTag("objectKey", req.NamespacedName)
+		sp.SetTag("ResourceVersion", cluster.ResourceVersion)
+		ctx = ot.ContextWithSpan(ctx, sp)
 	}
 
 	// Return early if the object or Cluster is paused.

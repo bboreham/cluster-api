@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	ot "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -46,6 +47,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
 	"sigs.k8s.io/cluster-api/util/secret"
+	"sigs.k8s.io/controller-runtime/pkg/tracing"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -144,6 +146,14 @@ func (r *KubeadmConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 		}
 		log.Error(err, "Failed to get config")
 		return ctrl.Result{}, err
+	}
+
+	sp, err := tracing.SpanFromAnnotations("Reconcile.KubeadmConfig", config.Annotations)
+	if err == nil && sp != nil {
+		defer sp.Finish()
+		sp.SetTag("objectKey", req.NamespacedName)
+		sp.SetTag("ResourceVersion", config.ResourceVersion)
+		ctx = ot.ContextWithSpan(ctx, sp)
 	}
 
 	// Look up the owner of this KubeConfig if there is one

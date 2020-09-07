@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/cluster-api/cmd/version"
 	kubeadmcontrolplanev1alpha3 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha3"
 	kubeadmcontrolplanecontrollers "sigs.k8s.io/cluster-api/controlplane/kubeadm/controllers"
+	"sigs.k8s.io/controller-runtime/pkg/tracing"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -111,6 +112,12 @@ func main() {
 
 	ctrl.SetLogger(klogr.New())
 
+	tracingCloser, err := tracing.SetupJaeger("control-plane-manager")
+	if err != nil {
+		klog.Fatalf("failed to set up Jaeger: %v", err)
+	}
+	defer tracingCloser.Close()
+
 	if profilerAddress != "" {
 		klog.Infof("Profiler listening for requests at %s", profilerAddress)
 		go func() {
@@ -128,7 +135,7 @@ func main() {
 		RetryPeriod:        &leaderElectionRetryPeriod,
 		Namespace:          watchNamespace,
 		SyncPeriod:         &syncPeriod,
-		NewClient:          newClientFunc,
+		NewClient:          tracing.WrapRuntimeClient(newClientFunc),
 		Port:               webhookPort,
 	})
 	if err != nil {

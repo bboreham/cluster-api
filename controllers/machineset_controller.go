@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	ot "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -41,6 +42,7 @@ import (
 	utilconversion "sigs.k8s.io/cluster-api/util/conversion"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
+	"sigs.k8s.io/controller-runtime/pkg/tracing"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -124,6 +126,14 @@ func (r *MachineSetReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 		}
 		// Error reading the object - requeue the request.
 		return ctrl.Result{}, err
+	}
+
+	sp, err := tracing.SpanFromAnnotations("Reconcile.MachineSet", machineSet.Annotations)
+	if err == nil && sp != nil {
+		defer sp.Finish()
+		sp.SetTag("objectKey", req.NamespacedName)
+		sp.SetTag("ResourceVersion", machineSet.ResourceVersion)
+		ctx = ot.ContextWithSpan(ctx, sp)
 	}
 
 	cluster, err := util.GetClusterByName(ctx, r.Client, machineSet.ObjectMeta.Namespace, machineSet.Spec.ClusterName)
@@ -318,6 +328,8 @@ func (r *MachineSetReconciler) syncReplicas(ctx context.Context, ms *clusterv1.M
 		)
 
 		for i := 0; i < diff; i++ {
+			sp, ctx := ot.StartSpanFromContext(ctx, "Create.Machine")
+			defer sp.Finish() // after all machines are created and we've waited for that to complete
 			logger.Info(fmt.Sprintf("Creating machine %d of %d, ( spec.replicas(%d) > currentMachineCount(%d) )",
 				i+1, diff, *(ms.Spec.Replicas), len(machines)))
 
@@ -375,6 +387,8 @@ func (r *MachineSetReconciler) syncReplicas(ctx context.Context, ms *clusterv1.M
 			logger.Info(fmt.Sprintf("Created machine %d of %d with name %q", i+1, diff, machine.Name))
 			r.recorder.Eventf(ms, corev1.EventTypeNormal, "SuccessfulCreate", "Created machine %q", machine.Name)
 			machineList = append(machineList, machine)
+			sp.SetTag("name", machine.Name)
+			sp.Finish()
 		}
 
 		if len(errs) > 0 {
@@ -393,6 +407,8 @@ func (r *MachineSetReconciler) syncReplicas(ctx context.Context, ms *clusterv1.M
 		var errs []error
 		machinesToDelete := getMachinesToDeletePrioritized(machines, diff, deletePriorityFunc)
 		for _, machine := range machinesToDelete {
+			sp, ctx := ot.StartSpanFromContext(ctx, "Delete.Machine")
+			defer sp.Finish() // after all machines are deleted and we've waited for that to complete
 			if err := r.Client.Delete(ctx, machine); err != nil {
 				logger.Error(err, "Unable to delete Machine", "machine", machine.Name)
 				r.recorder.Eventf(ms, corev1.EventTypeWarning, "FailedDelete", "Failed to delete machine %q: %v", machine.Name, err)
