@@ -49,6 +49,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
 	"sigs.k8s.io/cluster-api/util/secret"
+	"sigs.k8s.io/controller-runtime/pkg/tracing"
 )
 
 // +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;patch
@@ -110,6 +111,11 @@ func (r *KubeadmControlPlaneReconciler) Reconcile(ctx context.Context, req ctrl.
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{Requeue: true}, nil
+	}
+
+	ctx, sp, log := tracing.FromObject(ctx, "Reconcile.KubeadmControlPlane", kcp)
+	if sp != nil {
+		defer sp.Finish()
 	}
 
 	// Fetch the Cluster.

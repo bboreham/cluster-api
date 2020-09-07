@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sigs.k8s.io/controller-runtime/pkg/tracing"
 )
 
 // DockerClusterReconciler reconciles a DockerCluster object
@@ -57,6 +58,11 @@ func (r *DockerClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
+	}
+
+	ctx, sp, log := tracing.FromObject(ctx, "Reconcile.DockerCluster", dockerCluster)
+	if sp != nil {
+		defer sp.Finish()
 	}
 
 	// Fetch the Cluster.

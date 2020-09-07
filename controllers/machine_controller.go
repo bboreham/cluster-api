@@ -50,6 +50,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sigs.k8s.io/controller-runtime/pkg/tracing"
 )
 
 var (
@@ -138,6 +139,11 @@ func (r *MachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 
 		// Error reading the object - requeue the request.
 		return ctrl.Result{}, err
+	}
+
+	ctx, sp, log := tracing.FromObject(ctx, "Reconcile.Machine", m)
+	if sp != nil {
+		defer sp.Finish()
 	}
 
 	cluster, err := util.GetClusterByName(ctx, r.Client, m.ObjectMeta.Namespace, m.Spec.ClusterName)

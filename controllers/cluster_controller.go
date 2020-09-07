@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sigs.k8s.io/controller-runtime/pkg/tracing"
 )
 
 const (
@@ -107,6 +108,11 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 
 		// Error reading the object - requeue the request.
 		return ctrl.Result{}, err
+	}
+
+	ctx, sp, log := tracing.FromObject(ctx, "Reconcile.Cluster", cluster)
+	if sp != nil {
+		defer sp.Finish()
 	}
 
 	// Return early if the object or Cluster is paused.

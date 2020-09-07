@@ -43,6 +43,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sigs.k8s.io/controller-runtime/pkg/tracing"
 )
 
 // +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;patch
@@ -103,6 +104,11 @@ func (r *MachinePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 		log.Error(err, "Error reading the object - requeue the request.")
 		return ctrl.Result{}, err
+	}
+
+	ctx, sp, log := tracing.FromObject(ctx, "Reconcile.MachinePool", mp)
+	if sp != nil {
+		defer sp.Finish()
 	}
 
 	cluster, err := util.GetClusterByName(ctx, r.Client, mp.ObjectMeta.Namespace, mp.Spec.ClusterName)

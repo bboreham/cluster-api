@@ -20,9 +20,12 @@ import (
 	"fmt"
 	"os"
 
+	ot "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/client"
+	"sigs.k8s.io/controller-runtime/pkg/tracing"
+	utilyaml "sigs.k8s.io/cluster-api/util/yaml"
 )
 
 type configClusterOptions struct {
@@ -199,7 +202,11 @@ func templateListVariablesOutput(template client.Template) error {
 }
 
 func templateYAMLOutput(template client.Template) error {
-	yaml, err := template.Yaml()
+	span := ot.StartSpan("config.cluster")
+	defer span.Finish()
+	objs := template.Objs()
+	err := tracing.AddTraceAnnotationToUnstructured(span, objs)
+	yaml, err := utilyaml.FromUnstructured(objs)
 	if err != nil {
 		return err
 	}

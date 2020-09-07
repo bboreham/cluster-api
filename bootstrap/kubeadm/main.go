@@ -40,6 +40,7 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/tracing"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -118,6 +119,13 @@ func main() {
 
 	ctrl.SetLogger(klogr.New())
 
+	tracingCloser, err := tracing.SetupJaeger("bootstrap-manager")
+	if err != nil {
+		setupLog.Error(err, "failed to set up Jaeger")
+		os.Exit(1)
+	}
+	defer tracingCloser.Close()
+
 	if profilerAddress != "" {
 		klog.Infof("Profiler listening for requests at %s", profilerAddress)
 		go func() {
@@ -135,7 +143,7 @@ func main() {
 		RetryPeriod:        &leaderElectionRetryPeriod,
 		Namespace:          watchNamespace,
 		SyncPeriod:         &syncPeriod,
-		NewClient:          util.ManagerDelegatingClientFunc,
+		NewClient:          tracing.WrapRuntimeClient(util.ManagerDelegatingClientFunc),
 		Port:               webhookPort,
 	})
 	if err != nil {

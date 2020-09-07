@@ -51,6 +51,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sigs.k8s.io/controller-runtime/pkg/tracing"
 )
 
 // InitLocker is a lock that is used around kubeadm init
@@ -133,6 +134,11 @@ func (r *KubeadmConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 		log.Error(err, "Failed to get config")
 		return ctrl.Result{}, err
+	}
+
+	ctx, sp, log := tracing.FromObject(ctx, "Reconcile.KubeadmConfig", config)
+	if sp != nil {
+		defer sp.Finish()
 	}
 
 	// Look up the owner of this KubeConfig if there is one

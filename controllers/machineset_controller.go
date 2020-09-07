@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	ot "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -46,6 +47,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sigs.k8s.io/controller-runtime/pkg/tracing"
 )
 
 var (
@@ -122,6 +124,11 @@ func (r *MachineSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 		// Error reading the object - requeue the request.
 		return ctrl.Result{}, err
+	}
+
+	ctx, sp, log := tracing.FromObject(ctx, "Reconcile.MachineSet", machineSet)
+	if sp != nil {
+		defer sp.Finish()
 	}
 
 	cluster, err := util.GetClusterByName(ctx, r.Client, machineSet.ObjectMeta.Namespace, machineSet.Spec.ClusterName)
@@ -316,6 +323,8 @@ func (r *MachineSetReconciler) syncReplicas(ctx context.Context, ms *clusterv1.M
 		)
 
 		for i := 0; i < diff; i++ {
+			sp, ctx := ot.StartSpanFromContext(ctx, "Create.Machine")
+			defer sp.Finish() // after all machines are created and we've waited for that to complete
 			log.Info(fmt.Sprintf("Creating machine %d of %d, ( spec.replicas(%d) > currentMachineCount(%d) )",
 				i+1, diff, *(ms.Spec.Replicas), len(machines)))
 
@@ -373,6 +382,8 @@ func (r *MachineSetReconciler) syncReplicas(ctx context.Context, ms *clusterv1.M
 			log.Info(fmt.Sprintf("Created machine %d of %d with name %q", i+1, diff, machine.Name))
 			r.recorder.Eventf(ms, corev1.EventTypeNormal, "SuccessfulCreate", "Created machine %q", machine.Name)
 			machineList = append(machineList, machine)
+			sp.SetTag("name", machine.Name)
+			sp.Finish()
 		}
 
 		if len(errs) > 0 {
@@ -391,6 +402,8 @@ func (r *MachineSetReconciler) syncReplicas(ctx context.Context, ms *clusterv1.M
 		var errs []error
 		machinesToDelete := getMachinesToDeletePrioritized(machines, diff, deletePriorityFunc)
 		for _, machine := range machinesToDelete {
+			sp, ctx := ot.StartSpanFromContext(ctx, "Delete.Machine")
+			defer sp.Finish() // after all machines are deleted and we've waited for that to complete
 			if err := r.Client.Delete(ctx, machine); err != nil {
 				log.Error(err, "Unable to delete Machine", "machine", machine.Name)
 				r.recorder.Eventf(ms, corev1.EventTypeWarning, "FailedDelete", "Failed to delete machine %q: %v", machine.Name, err)

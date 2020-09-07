@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	ot "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	infrav1 "sigs.k8s.io/cluster-api/test/infrastructure/docker/api/v1alpha3"
@@ -181,6 +182,8 @@ func (m *Machine) Address(ctx context.Context) (string, error) {
 
 // Create creates a docker container hosting a Kubernetes node.
 func (m *Machine) Create(ctx context.Context, role string, version *string, mounts []infrav1.Mount) error {
+	sp, ctx := ot.StartSpanFromContext(ctx, "Machine.Create", ot.Tag{Key: "role", Value: role})
+	defer sp.Finish()
 	// Create if not exists.
 	if m.container == nil {
 		var err error
@@ -286,6 +289,8 @@ func (m *Machine) PreloadLoadImages(ctx context.Context, images []string) error 
 
 // ExecBootstrap runs bootstrap on a node, this is generally `kubeadm <init|join>`
 func (m *Machine) ExecBootstrap(ctx context.Context, data string) error {
+	sp, ctx := ot.StartSpanFromContext(ctx, "Machine.ExecBootstrap")
+	defer sp.Finish()
 	if m.container == nil {
 		return errors.New("unable to set ExecBootstrap. the container hosting this machine does not exists")
 	}
@@ -304,6 +309,7 @@ func (m *Machine) ExecBootstrap(ctx context.Context, data string) error {
 	var outErr bytes.Buffer
 	var outStd bytes.Buffer
 	for _, command := range commands {
+		sp.LogKV("command", command.Cmd+" "+strings.Join(command.Args, " "))
 		cmd := m.container.Commander.Command(command.Cmd, command.Args...)
 		cmd.SetStderr(&outErr)
 		cmd.SetStdout(&outStd)
