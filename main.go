@@ -17,6 +17,7 @@ package main
 
 import (
 	"flag"
+	"log"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -40,6 +41,7 @@ import (
 	expcontrollers "sigs.k8s.io/cluster-api/exp/controllers"
 	"sigs.k8s.io/cluster-api/feature"
 	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/tracing"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -146,6 +148,11 @@ func main() {
 	pflag.Parse()
 
 	ctrl.SetLogger(klogr.New())
+	tracingCloser, err := tracing.SetupJaeger("capi-controller")
+	if err != nil {
+		log.Fatalf("failed to set up Jaeger: %v", err)
+	}
+	defer tracingCloser.Close()
 
 	if profilerAddress != "" {
 		klog.Infof("Profiler listening for requests at %s", profilerAddress)
@@ -164,7 +171,7 @@ func main() {
 		RetryPeriod:            &leaderElectionRetryPeriod,
 		Namespace:              watchNamespace,
 		SyncPeriod:             &syncPeriod,
-		NewClient:              util.ManagerDelegatingClientFunc,
+		NewClient:              tracing.WrapRuntimeClient(util.ManagerDelegatingClientFunc),
 		Port:                   webhookPort,
 		HealthProbeBindAddress: healthAddr,
 	})
