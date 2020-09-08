@@ -30,6 +30,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	infrav1 "sigs.k8s.io/cluster-api/test/infrastructure/docker/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/test/infrastructure/docker/controllers"
+	"sigs.k8s.io/cluster-api/util/tracing"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -70,6 +71,13 @@ func main() {
 
 	ctrl.SetLogger(klogr.New())
 
+	tracingCloser, err := tracing.SetupJaeger("capd-controller")
+	if err != nil {
+		setupLog.Error(err, "failed to set up Jaeger")
+		os.Exit(1)
+	}
+	defer tracingCloser.Close()
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 myscheme,
 		MetricsBindAddress:     metricsAddr,
@@ -77,6 +85,7 @@ func main() {
 		LeaderElectionID:       "controller-leader-election-capd",
 		SyncPeriod:             &syncPeriod,
 		HealthProbeBindAddress: healthAddr,
+		NewClient:              tracing.NewRuntimeClient,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

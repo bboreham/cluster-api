@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/cluster-api/cmd/version"
 	expv1alpha3 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/feature"
+	"sigs.k8s.io/cluster-api/util/tracing"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -118,6 +119,12 @@ func main() {
 	pflag.Parse()
 
 	ctrl.SetLogger(klogr.New())
+
+	tracingCloser, err := tracing.SetupJaeger("bootstrap-manager")
+	if err != nil {
+		klog.Fatalf("failed to set up Jaeger: %v", err)
+	}
+	defer tracingCloser.Close()
 
 	if profilerAddress != "" {
 		klog.Infof("Profiler listening for requests at %s", profilerAddress)

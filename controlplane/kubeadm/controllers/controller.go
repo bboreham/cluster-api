@@ -23,6 +23,7 @@ import (
 
 	"github.com/blang/semver"
 	"github.com/go-logr/logr"
+	ot "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -51,6 +52,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
 	"sigs.k8s.io/cluster-api/util/secret"
+	"sigs.k8s.io/cluster-api/util/tracing"
 )
 
 // +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;patch
@@ -118,6 +120,14 @@ func (r *KubeadmControlPlaneReconciler) Reconcile(req ctrl.Request) (res ctrl.Re
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{Requeue: true}, nil
+	}
+
+	sp, err := tracing.SpanFromAnnotations("Reconcile.KubeadmControlPlane", kcp.Annotations)
+	if err == nil && sp != nil {
+		defer sp.Finish()
+		sp.SetTag("objectKey", req.NamespacedName)
+		sp.SetTag("ResourceVersion", kcp.ResourceVersion)
+		ctx = ot.ContextWithSpan(ctx, sp)
 	}
 
 	// Fetch the Cluster.
