@@ -32,7 +32,7 @@ func NewRuntimeClient(cache cache.Cache, config *rest.Config, options client.Opt
 		StatusClient: c,
 	}
 
-	return &tracingClient{Client: delegatingClient}, nil
+	return &tracingClient{Client: delegatingClient, scheme: options.Scheme}, nil
 }
 
 // WrapRuntimeClient wraps an existing NewRuntimeClient function with one that does tracing
@@ -42,7 +42,7 @@ func WrapRuntimeClient(upstreamNew manager.NewClientFunc) manager.NewClientFunc 
 		if err != nil {
 			return nil, err
 		}
-		return &tracingClient{Client: delegatingClient}, nil
+		return &tracingClient{Client: delegatingClient, scheme: options.Scheme}, nil
 	}
 }
 
@@ -67,45 +67,56 @@ func traceError(sp ot.Span, err error) error {
 // wrapper for Client which emits spans on each call
 type tracingClient struct {
 	client.Client
+	scheme *runtime.Scheme
+}
+
+// go via scheme to find out what an object is
+func (c *tracingClient) setBlankObjectTags(sp ot.Span, obj runtime.Object) {
+	if c.scheme != nil {
+		gvks, _, _ := c.scheme.ObjectKinds(obj)
+		for _, gvk := range gvks {
+			sp.SetTag("objectKind", gvk.String())
+		}
+	}
 }
 
 func (c *tracingClient) Get(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
-	sp, ctx := ot.StartSpanFromContext(ctx, "client.Get", ot.Tag{Key: "objectKey", Value: key.String()})
+	sp, ctx := ot.StartSpanFromContext(ctx, "k8s.Get", ot.Tag{Key: "objectKey", Value: key.String()})
 	defer sp.Finish()
-	setObjectTags(sp, obj)
+	c.setBlankObjectTags(sp, obj)
 	return traceError(sp, c.Client.Get(ctx, key, obj))
 }
 
 func (c *tracingClient) List(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
-	sp, ctx := ot.StartSpanFromContext(ctx, "client.List")
+	sp, ctx := ot.StartSpanFromContext(ctx, "k8s.List")
 	defer sp.Finish()
-	setObjectTags(sp, list)
+	c.setBlankObjectTags(sp, list)
 	return traceError(sp, c.Client.List(ctx, list, opts...))
 }
 
 func (c *tracingClient) Create(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
-	sp, ctx := ot.StartSpanFromContext(ctx, "client.Create")
+	sp, ctx := ot.StartSpanFromContext(ctx, "k8s.Create")
 	defer sp.Finish()
 	setObjectTags(sp, obj)
 	return traceError(sp, c.Client.Create(ctx, obj, opts...))
 }
 
 func (c *tracingClient) Delete(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
-	sp, ctx := ot.StartSpanFromContext(ctx, "client.Delete")
+	sp, ctx := ot.StartSpanFromContext(ctx, "k8s.Delete")
 	defer sp.Finish()
 	setObjectTags(sp, obj)
 	return traceError(sp, c.Client.Delete(ctx, obj, opts...))
 }
 
 func (c *tracingClient) Update(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
-	sp, ctx := ot.StartSpanFromContext(ctx, "client.Update")
+	sp, ctx := ot.StartSpanFromContext(ctx, "k8s.Update")
 	defer sp.Finish()
 	setObjectTags(sp, obj)
 	return traceError(sp, c.Client.Update(ctx, obj, opts...))
 }
 
 func (c *tracingClient) Patch(ctx context.Context, obj runtime.Object, patch client.Patch, opts ...client.PatchOption) error {
-	sp, ctx := ot.StartSpanFromContext(ctx, "client.Patch")
+	sp, ctx := ot.StartSpanFromContext(ctx, "k8s.Patch")
 	defer sp.Finish()
 	setObjectTags(sp, obj)
 	if data, err := patch.Data(obj); err == nil {
@@ -115,9 +126,9 @@ func (c *tracingClient) Patch(ctx context.Context, obj runtime.Object, patch cli
 }
 
 func (c *tracingClient) DeleteAllOf(ctx context.Context, obj runtime.Object, opts ...client.DeleteAllOfOption) error {
-	sp, ctx := ot.StartSpanFromContext(ctx, "client.DeleteAllOf")
+	sp, ctx := ot.StartSpanFromContext(ctx, "k8s.DeleteAllOf")
 	defer sp.Finish()
-	setObjectTags(sp, obj)
+	c.setBlankObjectTags(sp, obj)
 	return traceError(sp, c.Client.DeleteAllOf(ctx, obj, opts...))
 }
 
@@ -130,14 +141,14 @@ type tracingStatusWriter struct {
 }
 
 func (s *tracingStatusWriter) Update(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
-	sp, ctx := ot.StartSpanFromContext(ctx, "client.Status.Update")
+	sp, ctx := ot.StartSpanFromContext(ctx, "k8s.Status.Update")
 	defer sp.Finish()
 	setObjectTags(sp, obj)
 	return traceError(sp, s.StatusWriter.Update(ctx, obj, opts...))
 }
 
 func (s *tracingStatusWriter) Patch(ctx context.Context, obj runtime.Object, patch client.Patch, opts ...client.PatchOption) error {
-	sp, ctx := ot.StartSpanFromContext(ctx, "client.Status.Patch")
+	sp, ctx := ot.StartSpanFromContext(ctx, "k8s.Status.Patch")
 	defer sp.Finish()
 	setObjectTags(sp, obj)
 	if data, err := patch.Data(obj); err == nil {
