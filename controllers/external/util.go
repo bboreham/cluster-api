@@ -20,6 +20,7 @@ import (
 	"context"
 	"strings"
 
+	ot "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	"sigs.k8s.io/cluster-api/util/tracing"
 )
 
 const (
@@ -89,7 +91,7 @@ func CloneTemplate(ctx context.Context, in *CloneTemplateInput) (*corev1.ObjectR
 		OwnerRef:    in.OwnerRef,
 		Labels:      in.Labels,
 	}
-	to, err := GenerateTemplate(generateTemplateInput)
+	to, err := GenerateTemplate(ctx, generateTemplateInput)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +131,7 @@ type GenerateTemplateInput struct {
 	Labels map[string]string
 }
 
-func GenerateTemplate(in *GenerateTemplateInput) (*unstructured.Unstructured, error) {
+func GenerateTemplate(ctx context.Context, in *GenerateTemplateInput) (*unstructured.Unstructured, error) {
 	template, found, err := unstructured.NestedMap(in.Template.Object, "spec", "template")
 	if !found {
 		return nil, errors.Errorf("missing Spec.Template on %v %q", in.Template.GroupVersionKind(), in.Template.GetName())
@@ -152,6 +154,11 @@ func GenerateTemplate(in *GenerateTemplateInput) (*unstructured.Unstructured, er
 	annotations := to.GetAnnotations()
 	annotations[clusterv1.TemplateClonedFromNameAnnotation] = in.TemplateRef.Name
 	annotations[clusterv1.TemplateClonedFromGroupKindAnnotation] = in.TemplateRef.GroupVersionKind().GroupKind().String()
+	if sp := ot.SpanFromContext(ctx); sp != nil {
+		if spanContext, err := tracing.GenerateEmbeddableSpanContext(sp); err == nil {
+			annotations[tracing.TraceAnnotationKey] = spanContext
+		}
+	}
 	to.SetAnnotations(annotations)
 
 	// Set labels.
