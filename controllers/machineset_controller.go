@@ -328,6 +328,8 @@ func (r *MachineSetReconciler) syncReplicas(ctx context.Context, ms *clusterv1.M
 		)
 
 		for i := 0; i < diff; i++ {
+			sp, ctx := ot.StartSpanFromContext(ctx, "Create.Machine")
+			defer sp.Finish() // after all machines are created and we've waited for that to complete
 			logger.Info(fmt.Sprintf("Creating machine %d of %d, ( spec.replicas(%d) > currentMachineCount(%d) )",
 				i+1, diff, *(ms.Spec.Replicas), len(machines)))
 
@@ -385,6 +387,8 @@ func (r *MachineSetReconciler) syncReplicas(ctx context.Context, ms *clusterv1.M
 			logger.Info(fmt.Sprintf("Created machine %d of %d with name %q", i+1, diff, machine.Name))
 			r.recorder.Eventf(ms, corev1.EventTypeNormal, "SuccessfulCreate", "Created machine %q", machine.Name)
 			machineList = append(machineList, machine)
+			sp.SetTag("name", machine.Name)
+			sp.Finish()
 		}
 
 		if len(errs) > 0 {
@@ -403,6 +407,8 @@ func (r *MachineSetReconciler) syncReplicas(ctx context.Context, ms *clusterv1.M
 		var errs []error
 		machinesToDelete := getMachinesToDeletePrioritized(machines, diff, deletePriorityFunc)
 		for _, machine := range machinesToDelete {
+			sp, ctx := ot.StartSpanFromContext(ctx, "Delete.Machine")
+			defer sp.Finish() // after all machines are deleted and we've waited for that to complete
 			if err := r.Client.Delete(ctx, machine); err != nil {
 				logger.Error(err, "Unable to delete Machine", "machine", machine.Name)
 				r.recorder.Eventf(ms, corev1.EventTypeWarning, "FailedDelete", "Failed to delete machine %q: %v", machine.Name, err)
