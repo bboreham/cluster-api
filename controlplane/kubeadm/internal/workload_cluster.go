@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/blang/semver"
+	ot "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -113,6 +114,8 @@ type HealthCheckResult map[string]error
 // The return map is a map of node names as keys to error that that node encountered.
 // All nodes will exist in the map with nil errors if there were no errors for that node.
 func (w *Workload) ControlPlaneIsHealthy(ctx context.Context) (HealthCheckResult, error) {
+	sp, ctx := ot.StartSpanFromContext(ctx, "Workload.ControlPlaneIsHealthy")
+	defer sp.Finish()
 	controlPlaneNodes, err := w.getControlPlaneNodes(ctx)
 	if err != nil {
 		return nil, err
@@ -268,6 +271,8 @@ type ClusterStatus struct {
 
 // ClusterStatus returns the status of the cluster.
 func (w *Workload) ClusterStatus(ctx context.Context) (ClusterStatus, error) {
+	sp, ctx := ot.StartSpanFromContext(ctx, "Workload.ClusterStatus")
+	defer sp.Finish()
 	status := ClusterStatus{}
 
 	// count the control plane nodes
